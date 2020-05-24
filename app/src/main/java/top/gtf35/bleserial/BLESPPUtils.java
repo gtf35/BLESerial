@@ -12,7 +12,7 @@ import android.util.Log;
 
 import java.io.IOException;
 import java.io.InputStream;
-import java.util.Arrays;
+import java.util.Formatter;
 import java.util.UUID;
 
 
@@ -64,6 +64,7 @@ class BLESPPUtils {
         BluetoothDevice romoteDevice;
         OnBluetoothAction onBluetoothAction;
         boolean isRunning = false;
+        String stopString = "\r\n";
 
         @Override
         protected Void doInBackground(String... bluetoothDevicesMac) {
@@ -103,34 +104,71 @@ class BLESPPUtils {
             }
 
             // 开始监听数据接收
-            // todo 验证是不是真能收到数据
             try {
                 InputStream inputStream = bluetoothSocket.getInputStream();
-                StringBuilder sb = new StringBuilder();
+                byte[] result = new byte[0];
                 while (isRunning) {
-                    byte[] buffer = new byte[1000];
                     Log.d("BLEUTILS", "looping");
-                    int result = inputStream.read(buffer);
-                    sb.append(Arrays.toString(buffer));
-                    //  -1 代表没有数据了，这次接收完成
-                    if (result == -1) {
+                    byte[] buffer = new byte[256];
+                    // 等待有数据
+                    while (inputStream.available() == 0 && isRunning) {if (System.currentTimeMillis() < 0) break;}
+                    while (isRunning) {
+                        try {
+                            int num = inputStream.read(buffer);
+                            byte[] temp = new byte[result.length + num];
+                            System.arraycopy(result, 0, temp, 0, result.length);
+                            System.arraycopy(buffer, 0, temp, result.length, num);
+                            result = temp;
+                            if (inputStream.available() == 0) break;
+                        } catch (Exception e) {
+                            e.printStackTrace();
+                            onBluetoothAction.onConnectFailed("接收数据单次失败：" + e.getMessage());
+                            break;
+                        }
+                    }
+                    try {
                         // 返回数据
-                        onBluetoothAction.onReceiveBytes(sb.toString().getBytes());
-                        // 清空
-                        sb = new StringBuilder();
+                        Log.d("BLEUTILS", "当前累计收到的数据=>" + byte2Hex(result));
+                        byte[] stopFlag = stopString.getBytes();
+                        int stopFlagSize = stopFlag.length;
+                        boolean shouldCallOnReceiveBytes = false;
+                        Log.d("BLEUTILS","标志位为：" + byte2Hex(stopFlag));
+                        for (int i = stopFlagSize - 1; i >= 0; i--) {
+                            int indexInResult = result.length - (stopFlagSize - i);
+                            if (indexInResult >= result.length || indexInResult < 0) {
+                                shouldCallOnReceiveBytes = false;
+                                Log.d("BLEUTILS","收到的数据比停止字符串短");
+                                break;
+                            }
+                            if (stopFlag[i] == result[indexInResult]) {
+                                Log.d("BLEUTILS", "发现" + byte2Hex(stopFlag[i]) + "等于" + byte2Hex(result[indexInResult]));
+                                shouldCallOnReceiveBytes = true;
+                            } else {
+                                Log.d("BLEUTILS", "发现" + byte2Hex(stopFlag[i]) + "不等于" + byte2Hex(result[indexInResult]));
+                                shouldCallOnReceiveBytes = false;
+                            }
+                        }
+                        if (shouldCallOnReceiveBytes) {
+                            onBluetoothAction.onReceiveBytes(result);
+                            // 清空
+                            result = new byte[0];
+                        }
+                    } catch (Exception e) {
+                        e.printStackTrace();
+                        onBluetoothAction.onConnectFailed("验证收到数据结束标志出错：" + e.getMessage());
                     }
                 }
             } catch (Exception e) {
                 e.printStackTrace();
                 onBluetoothAction.onConnectFailed("接收数据失败：" + e.getMessage());
             }
-
             return null;
         }
 
         @Override
         protected void onCancelled() {
             try {
+                Log.d("BLEUTILS", "AsyncTask开始释放资源");
                 isRunning = false;
                 bluetoothSocket.close();
             } catch (IOException e) {
@@ -140,6 +178,7 @@ class BLESPPUtils {
 
         /**
          * 发送
+         *
          * @param msg 内容
          */
         void send(byte[] msg) {
@@ -151,46 +190,56 @@ class BLESPPUtils {
     }
 
     /**
+     * 设置停止标志位字符串
+     *
+     * @param stopString 停止位字符串
+     */
+    void setStopString(String stopString) {
+        mConnectTask.stopString = stopString;
+    }
+
+    /**
      * 蓝牙活动回调
      */
     public interface OnBluetoothAction {
         /**
-         * 发现新设备
+         * 当发现新设备
          * @param device 设备
          */
         void onFoundDevice(BluetoothDevice device);
 
         /**
-         * 连接成功
+         * 当连接成功
          */
         void onConnectSuccess(BluetoothDevice device);
 
         /**
-         * 连接失败
+         * 当连接失败
          * @param msg 失败信息
          */
         void onConnectFailed(String msg);
 
         /**
-         * 接收到 byte 数组
+         * 当接收到 byte 数组
          * @param bytes 内容
          */
         void onReceiveBytes(byte[] bytes);
 
         /**
-         * 发送 byte 数组
+         * 当调用接口发送了 byte 数组
          * @param bytes 内容
          */
         void onSendBytes(byte[] bytes);
 
         /**
-         * 结束搜索设备
+         * 当结束搜索设备
          */
         void onFinishFoundDevice();
     }
 
     /**
      * 构造蓝牙工具
+     *
      * @param context 上下文
      * @param onBluetoothAction 蓝牙状态改变回调
      */
@@ -200,7 +249,7 @@ class BLESPPUtils {
     }
 
     /**
-     * 初始化回调
+     * 初始化
      */
     void onCreate() {
         IntentFilter foundFilter = new IntentFilter(BluetoothDevice.ACTION_FOUND);
@@ -210,13 +259,15 @@ class BLESPPUtils {
     }
 
     /**
-     * 销毁回调
+     * 销毁，释放资源
      */
     void onDestroy() {
         try {
+            Log.d("BLEUTILS", "onDestroy，开始释放资源");
+            mConnectTask.isRunning = false;
+            mConnectTask.cancel(true);
             mContext.unregisterReceiver(mReceiver);
             mContext.unregisterReceiver(mFinishFoundReceiver);
-            mConnectTask.cancel(true);
         } catch (Exception e) {e.printStackTrace();}
     }
 
@@ -224,19 +275,23 @@ class BLESPPUtils {
      * 开始搜索
      */
     void startDiscovery() {
+        if (mBluetoothAdapter.isDiscovering()) mBluetoothAdapter.cancelDiscovery();
         mBluetoothAdapter.startDiscovery();
     }
 
     /**
      * 使用搜索到的数据连接
+     *
      * @param device 设备
      */
     void connect(BluetoothDevice device) {
+        mBluetoothAdapter.cancelDiscovery();
         connect(device.getAddress());
     }
 
     /**
      * 使用Mac地址来连接
+     *
      * @param deviceMac 要连接的设备的 MAC
      */
     private void connect(String deviceMac) {
@@ -252,10 +307,45 @@ class BLESPPUtils {
 
     /**
      * 发送 byte 数组到串口
+     *
      * @param bytes 要发送的数据
      */
     void send(byte[] bytes) {
         if (mConnectTask != null) mConnectTask.send(bytes);
     }
 
+
+    /**
+     * 字节转换为 16 进制字符串
+     *
+     * @param b 字节
+     * @return Hex 字符串
+     */
+    private static String byte2Hex(byte b) {
+        StringBuilder hex = new StringBuilder(Integer.toHexString(b));
+        if (hex.length() > 2) {
+            hex = new StringBuilder(hex.substring(hex.length() - 2));
+        }
+        while (hex.length() < 2) {
+            hex.insert(0, "0");
+        }
+        return hex.toString();
+    }
+
+
+    /**
+     * 字节数组转换为 16 进制字符串
+     *
+     * @param bytes 字节数组
+     * @return Hex 字符串
+     */
+    private static String byte2Hex(byte[] bytes) {
+        Formatter formatter = new Formatter();
+        for (byte b : bytes) {
+            formatter.format("%02x", b);
+        }
+        String hash = formatter.toString();
+        formatter.close();
+        return hash;
+    }
 }

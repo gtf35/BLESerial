@@ -46,6 +46,8 @@ public class MainActivity extends AppCompatActivity implements BLESPPUtils.OnBlu
         mInputET = findViewById(R.id.ed_input);
         // 初始化
         mBLESPPUtils = new BLESPPUtils(this, this);
+        // 设置接收停止标志位字符串
+        mBLESPPUtils.setStopString("\r\n");
         mDeviceDialogCtrl = new DeviceDialogCtrl(this);
         mBLESPPUtils.onCreate();
         mDeviceDialogCtrl.show();
@@ -74,7 +76,7 @@ public class MainActivity extends AppCompatActivity implements BLESPPUtils.OnBlu
     }
 
     /**
-     * 发现新设备
+     * 当发现新设备
      *
      * @param device 设备
      */
@@ -101,7 +103,7 @@ public class MainActivity extends AppCompatActivity implements BLESPPUtils.OnBlu
     }
 
     /**
-     * 连接成功
+     * 当连接成功
      *
      * @param device 设备
      */
@@ -114,12 +116,13 @@ public class MainActivity extends AppCompatActivity implements BLESPPUtils.OnBlu
                 mLogTv.setText(
                         mLogTv.getText() + "\n连接成功:" + device.getName() + " | " + device.getAddress()
                 );
+                mDeviceDialogCtrl.dismiss();
             }
         });
     }
 
     /**
-     * 连接失败
+     * 当连接失败
      *
      * @param msg 失败信息
      */
@@ -135,7 +138,7 @@ public class MainActivity extends AppCompatActivity implements BLESPPUtils.OnBlu
     }
 
     /**
-     * 接收到 byte 数组
+     * 当接收到 byte 数组
      *
      * @param bytes 内容
      */
@@ -151,7 +154,7 @@ public class MainActivity extends AppCompatActivity implements BLESPPUtils.OnBlu
     }
 
     /**
-     * 发送 byte 数组
+     * 当调用接口发送 byte 数组
      *
      * @param bytes 内容
      */
@@ -167,7 +170,7 @@ public class MainActivity extends AppCompatActivity implements BLESPPUtils.OnBlu
     }
 
     /**
-     * 结束搜索设备
+     * 当结束搜索设备
      */
     @Override
     public void onFinishFoundDevice() { }
@@ -180,7 +183,7 @@ public class MainActivity extends AppCompatActivity implements BLESPPUtils.OnBlu
     @Override
     public void onClick(View v) {
         if (v.getId() == R.id.btn_send) {
-            mBLESPPUtils.send(mInputET.getText().toString().getBytes());
+            mBLESPPUtils.send((mInputET.getText().toString() + "\n").getBytes());
         }
     }
 
@@ -260,6 +263,13 @@ public class MainActivity extends AppCompatActivity implements BLESPPUtils.OnBlu
         }
 
         /**
+         * 取消对话框
+         */
+        void dismiss() {
+            mConnectDeviceDialog.dismiss();
+        }
+
+        /**
          * 添加一个设备到列表
          * @param device 设备
          * @param onClickListener 点击回调
@@ -293,6 +303,7 @@ public class MainActivity extends AppCompatActivity implements BLESPPUtils.OnBlu
 
     /**
      * 在主线程弹出 Toast
+     *
      * @param msg 信息
      */
     private void postShowToast(final String msg) {
@@ -301,6 +312,7 @@ public class MainActivity extends AppCompatActivity implements BLESPPUtils.OnBlu
 
     /**
      * 在主线程弹出 Toast
+     *
      * @param msg 信息
      * @param doSthAfterPost 在弹出后做点什么
      */
@@ -317,4 +329,5 @@ public class MainActivity extends AppCompatActivity implements BLESPPUtils.OnBlu
     private interface DoSthAfterPost {
         void doIt();
     }
+
 }
