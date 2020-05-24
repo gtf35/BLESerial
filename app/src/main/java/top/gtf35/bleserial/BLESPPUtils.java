@@ -76,7 +76,7 @@ class BLESPPUtils {
             try {
                 UUID SPP_UUID = UUID.fromString("00001101-0000-1000-8000-00805F9B34FB");
                 romoteDevice = bluetoothAdapter.getRemoteDevice(bluetoothDevicesMac[0]);
-                bluetoothSocket =  romoteDevice.createRfcommSocketToServiceRecord(SPP_UUID);
+                bluetoothSocket = romoteDevice.createRfcommSocketToServiceRecord(SPP_UUID);
             } catch (Exception e) {
                 logD("获取Socket失败");
                 isRunning = false;
@@ -316,6 +316,19 @@ class BLESPPUtils {
         if (mConnectTask != null) mConnectTask.send(bytes);
     }
 
+    /**
+     * 获取用户是否打开了蓝牙
+     */
+    boolean isBluetoothEnable() {
+        return mBluetoothAdapter.isEnabled();
+    }
+
+    /**
+     * 开启蓝牙
+     */
+    void enableBluetooth() {
+        mBluetoothAdapter.enable();
+    }
 
     /**
      * 字节转换为 16 进制字符串

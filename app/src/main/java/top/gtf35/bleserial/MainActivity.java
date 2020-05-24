@@ -44,12 +44,19 @@ public class MainActivity extends AppCompatActivity implements BLESPPUtils.OnBlu
         findViewById(R.id.btn_send).setOnClickListener(this);
         mLogTv = findViewById(R.id.tv_log);
         mInputET = findViewById(R.id.ed_input);
+
         // 初始化
         mBLESPPUtils = new BLESPPUtils(this, this);
+        // 启用日志输出
+        mBLESPPUtils.enableBluetooth();
         // 设置接收停止标志位字符串
         mBLESPPUtils.setStopString("\r\n");
-        mDeviceDialogCtrl = new DeviceDialogCtrl(this);
+        // 用户没有开启蓝牙的话打开蓝牙
+        if (!mBLESPPUtils.isBluetoothEnable()) mBLESPPUtils.enableBluetooth();
+        // 启动工具类
         mBLESPPUtils.onCreate();
+
+        mDeviceDialogCtrl = new DeviceDialogCtrl(this);
         mDeviceDialogCtrl.show();
     }
 
