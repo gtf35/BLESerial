@@ -25,6 +25,7 @@ import java.util.UUID;
  * @author gtf35 gtf@gtf35.top
  */
 class BLESPPUtils {
+    private static boolean mEnableLogOut = false;
     private Context mContext;
     private BluetoothAdapter mBluetoothAdapter = BluetoothAdapter.getDefaultAdapter();
     private OnBluetoothAction mOnBluetoothAction;
@@ -77,7 +78,7 @@ class BLESPPUtils {
                 romoteDevice = bluetoothAdapter.getRemoteDevice(bluetoothDevicesMac[0]);
                 bluetoothSocket =  romoteDevice.createRfcommSocketToServiceRecord(SPP_UUID);
             } catch (Exception e) {
-                Log.d("log", "获取Socket失败");
+                logD("获取Socket失败");
                 isRunning = false;
                 e.printStackTrace();
                 return null;
@@ -94,11 +95,11 @@ class BLESPPUtils {
             try {
                 // 等待连接，会阻塞线程
                 bluetoothSocket.connect();
-                Log.d("BLEUTILS", "连接成功");
+                logD( "连接成功");
                 onBluetoothAction.onConnectSuccess(romoteDevice);
             } catch (Exception connectException) {
                 connectException.printStackTrace();
-                Log.d("BLEUTILS", "连接失败:" + connectException.getMessage());
+                logD("连接失败:" + connectException.getMessage());
                 onBluetoothAction.onConnectFailed("连接失败:" + connectException.getMessage());
                 return null;
             }
@@ -108,7 +109,7 @@ class BLESPPUtils {
                 InputStream inputStream = bluetoothSocket.getInputStream();
                 byte[] result = new byte[0];
                 while (isRunning) {
-                    Log.d("BLEUTILS", "looping");
+                    logD("looping");
                     byte[] buffer = new byte[256];
                     // 等待有数据
                     while (inputStream.available() == 0 && isRunning) {if (System.currentTimeMillis() < 0) break;}
@@ -128,23 +129,23 @@ class BLESPPUtils {
                     }
                     try {
                         // 返回数据
-                        Log.d("BLEUTILS", "当前累计收到的数据=>" + byte2Hex(result));
+                        logD("当前累计收到的数据=>" + byte2Hex(result));
                         byte[] stopFlag = stopString.getBytes();
                         int stopFlagSize = stopFlag.length;
                         boolean shouldCallOnReceiveBytes = false;
-                        Log.d("BLEUTILS","标志位为：" + byte2Hex(stopFlag));
+                        logD("标志位为：" + byte2Hex(stopFlag));
                         for (int i = stopFlagSize - 1; i >= 0; i--) {
                             int indexInResult = result.length - (stopFlagSize - i);
                             if (indexInResult >= result.length || indexInResult < 0) {
                                 shouldCallOnReceiveBytes = false;
-                                Log.d("BLEUTILS","收到的数据比停止字符串短");
+                                logD("收到的数据比停止字符串短");
                                 break;
                             }
                             if (stopFlag[i] == result[indexInResult]) {
-                                Log.d("BLEUTILS", "发现" + byte2Hex(stopFlag[i]) + "等于" + byte2Hex(result[indexInResult]));
+                                logD("发现" + byte2Hex(stopFlag[i]) + "等于" + byte2Hex(result[indexInResult]));
                                 shouldCallOnReceiveBytes = true;
                             } else {
-                                Log.d("BLEUTILS", "发现" + byte2Hex(stopFlag[i]) + "不等于" + byte2Hex(result[indexInResult]));
+                                logD("发现" + byte2Hex(stopFlag[i]) + "不等于" + byte2Hex(result[indexInResult]));
                                 shouldCallOnReceiveBytes = false;
                             }
                         }
@@ -168,7 +169,7 @@ class BLESPPUtils {
         @Override
         protected void onCancelled() {
             try {
-                Log.d("BLEUTILS", "AsyncTask开始释放资源");
+                logD("AsyncTask 开始释放资源");
                 isRunning = false;
                 bluetoothSocket.close();
             } catch (IOException e) {
@@ -194,6 +195,7 @@ class BLESPPUtils {
      *
      * @param stopString 停止位字符串
      */
+    @SuppressWarnings("SameParameterValue")
     void setStopString(String stopString) {
         mConnectTask.stopString = stopString;
     }
@@ -263,7 +265,7 @@ class BLESPPUtils {
      */
     void onDestroy() {
         try {
-            Log.d("BLEUTILS", "onDestroy，开始释放资源");
+            logD("onDestroy，开始释放资源");
             mConnectTask.isRunning = false;
             mConnectTask.cancel(true);
             mContext.unregisterReceiver(mReceiver);
@@ -347,5 +349,20 @@ class BLESPPUtils {
         String hash = formatter.toString();
         formatter.close();
         return hash;
+    }
+
+    /**
+     * 启用日志输出
+     */
+    @SuppressWarnings("unused")
+    static void setEnableLogOut() {
+        mEnableLogOut = true;
+    }
+
+    /**
+     * 打印日志
+     */
+    private static void logD(String msg) {
+        if (mEnableLogOut)Log.d("BLEUTILS", msg);
     }
 }
